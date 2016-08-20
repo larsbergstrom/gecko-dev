@@ -381,33 +381,6 @@ class TreeMetadataEmitter(LoggingMixin):
         with open(toml_file, 'r') as f:
             return pytoml.load(f)
 
-    def _verify_deps(self, context, crate_dir, crate_name, dependencies, description='Dependency'):
-        """Verify that a crate's dependencies all specify local paths."""
-        for dep_crate_name, values in dependencies.iteritems():
-            # A simple version number.
-            if isinstance(values, (str, unicode)):
-                raise SandboxValidationError(
-                    '%s %s of crate %s does not list a path' % (description, dep_crate_name, crate_name),
-                    context)
-
-            dep_path = values.get('path', None)
-            if not dep_path:
-                raise SandboxValidationError(
-                    '%s %s of crate %s does not list a path' % (description, dep_crate_name, crate_name),
-                    context)
-
-            # Try to catch the case where somebody listed a
-            # local path for development.
-            if os.path.isabs(dep_path):
-                raise SandboxValidationError(
-                    '%s %s of crate %s has a non-relative path' % (description, dep_crate_name, crate_name),
-                    context)
-
-            if not os.path.exists(mozpath.join(context.config.topsrcdir, crate_dir, dep_path)):
-                raise SandboxValidationError(
-                    '%s %s of crate %s refers to a non-existent path' % (description, dep_crate_name, crate_name),
-                    context)
-
     def _verify_local_paths(self, context, crate_dir, config):
         """Verify that a Cargo.toml config specifies local paths for all its dependencies."""
         crate_name = config['package']['name']
@@ -432,14 +405,9 @@ class TreeMetadataEmitter(LoggingMixin):
             return
 
         crate_deps = config.get('dependencies', {})
-        if crate_deps:
-            self._verify_deps(context, crate_dir, crate_name, crate_deps)
 
         has_custom_build = 'build' in config['package']
         build_deps = config.get('build-dependencies', {})
-        if has_custom_build and build_deps:
-            self._verify_deps(context, crate_dir, crate_name, build_deps,
-                              description='Build dependency')
 
         # We have now verified that all the declared dependencies of
         # this crate have local paths.  Now verify recursively.
@@ -489,8 +457,6 @@ class TreeMetadataEmitter(LoggingMixin):
             raise SandboxValidationError(
                 'crate-type %s is not permitted for %s' % (crate_type, libname),
                 context)
-
-        self._verify_local_paths(context, context.relsrcdir, config)
 
         return RustLibrary(context, libname, cargo_file, crate_type, **static_args)
 
